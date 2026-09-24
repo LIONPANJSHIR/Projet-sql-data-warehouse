@@ -1,18 +1,37 @@
+
 USE DataWarehouse;
 GO
 
 /* ============================================================
    BRONZE LAYER
+   ============================================================
    Objectif :
-   - Stockage des données brutes provenant des systèmes sources
-   - Pas de contraintes PK / FK
-   - Transformation minimale
-   - Conservation des valeurs invalides pour contrôle en Silver
+   - Stocker les données brutes provenant des systèmes sources.
+   - Conserver les données aussi proches que possible de leur
+     format d'origine.
+   - Ne pas appliquer de contraintes PK / FK à ce stade.
+   - Limiter les transformations et nettoyages.
+   - Conserver les valeurs invalides ou incohérentes afin de
+     pouvoir les identifier et les traiter dans la couche Silver.
+
+   Systèmes sources :
+   - CRM : données clients, produits et ventes.
+   - ERP : informations complémentaires clients, localisation
+           et catégories produits.
+
+   Métadonnées techniques :
+   - dwh_ingestion_timestamp :
+       Date et heure de chargement de la ligne dans le DWH.
+   - dwh_source_system :
+       Système source dont provient la donnée.
    ============================================================ */
 
 
 /* ============================================================
-   CRM - Customer Information
+   TABLE : bronze.crm_cust_info
+   SOURCE : CRM
+   DESCRIPTION :
+   Stocke les informations brutes relatives aux clients.
    ============================================================ */
 
 DROP TABLE IF EXISTS bronze.crm_cust_info;
@@ -20,23 +39,38 @@ GO
 
 CREATE TABLE bronze.crm_cust_info
 (
-    cst_id              INT,
-    cst_key             VARCHAR(50),
-    cst_firstname       VARCHAR(50),
-    cst_lastname        VARCHAR(50),
-    cst_marital_status  VARCHAR(20),
-    cst_gndr            VARCHAR(20),
-    cst_create_date     VARCHAR(20),
+    -- Identifiant du client dans le système source
+    cst_id                   INT,
 
-    -- Métadonnées techniques
-    dwh_ingestion_timestamp DATETIME2 DEFAULT SYSDATETIME(),
-    dwh_source_system       VARCHAR(20) DEFAULT 'CRM'
+    -- Clé métier du client
+    cst_key                  VARCHAR(50),
+
+    -- Informations d'identité
+    cst_firstname            VARCHAR(50),
+    cst_lastname             VARCHAR(50),
+
+    -- Statut matrimonial tel qu'il apparaît dans la source
+    cst_marital_status       VARCHAR(20),
+
+    -- Genre tel qu'il apparaît dans la source
+    cst_gndr                 VARCHAR(20),
+
+    -- Date conservée sous forme texte en Bronze
+    -- La conversion vers DATE sera effectuée en Silver
+    cst_create_date          VARCHAR(20),
+
+    -- Métadonnées techniques du Data Warehouse
+    dwh_ingestion_timestamp  DATETIME2 DEFAULT SYSDATETIME(),
+    dwh_source_system        VARCHAR(20) DEFAULT 'CRM'
 );
 GO
 
 
 /* ============================================================
-   CRM - Product Information
+   TABLE : bronze.crm_prd_info
+   SOURCE : CRM
+   DESCRIPTION :
+   Stocke les informations brutes relatives aux produits.
    ============================================================ */
 
 DROP TABLE IF EXISTS bronze.crm_prd_info;
@@ -44,22 +78,38 @@ GO
 
 CREATE TABLE bronze.crm_prd_info
 (
-    prd_id              INT,
-    prd_key             VARCHAR(50),
-    prd_nm              VARCHAR(100),
-    prd_cost            VARCHAR(50),
-    prd_line            VARCHAR(50),
-    prd_start_dt        VARCHAR(20),
-    prd_end_dt          VARCHAR(20),
+    -- Identifiant du produit
+    prd_id                   INT,
 
-    dwh_ingestion_timestamp DATETIME2 DEFAULT SYSDATETIME(),
-    dwh_source_system       VARCHAR(20) DEFAULT 'CRM'
+    -- Clé métier du produit
+    prd_key                  VARCHAR(50),
+
+    -- Nom du produit
+    prd_nm                   VARCHAR(100),
+
+    -- Coût conservé dans son format source
+    -- La conversion numérique sera réalisée en Silver
+    prd_cost                 VARCHAR(50),
+
+    -- Ligne / gamme du produit
+    prd_line                 VARCHAR(50),
+
+    -- Dates conservées sous forme texte
+    prd_start_dt             VARCHAR(20),
+    prd_end_dt               VARCHAR(20),
+
+    -- Métadonnées techniques
+    dwh_ingestion_timestamp  DATETIME2 DEFAULT SYSDATETIME(),
+    dwh_source_system        VARCHAR(20) DEFAULT 'CRM'
 );
 GO
 
 
 /* ============================================================
-   CRM - Sales Details
+   TABLE : bronze.crm_sales_details
+   SOURCE : CRM
+   DESCRIPTION :
+   Stocke les transactions de ventes provenant du CRM.
    ============================================================ */
 
 DROP TABLE IF EXISTS bronze.crm_sales_details;
@@ -67,27 +117,42 @@ GO
 
 CREATE TABLE bronze.crm_sales_details
 (
-    sls_ord_num         VARCHAR(50),
-    sls_prd_key         VARCHAR(50),
-    sls_cust_id         INT,
+    -- Numéro de commande
+    sls_ord_num              VARCHAR(50),
 
-    -- Dates conservées telles qu'elles arrivent de la source
-    sls_order_dt        VARCHAR(20),
-    sls_ship_dt         VARCHAR(20),
-    sls_due_dt          VARCHAR(20),
+    -- Clé du produit vendu
+    sls_prd_key              VARCHAR(50),
 
-    sls_sales           VARCHAR(50),
-    sls_quantity        VARCHAR(50),
-    sls_price           VARCHAR(50),
+    -- Identifiant du client
+    sls_cust_id              INT,
 
-    dwh_ingestion_timestamp DATETIME2 DEFAULT SYSDATETIME(),
-    dwh_source_system       VARCHAR(20) DEFAULT 'CRM'
+    -- Dates conservées telles qu'elles arrivent de la source.
+    -- Leur validation et conversion seront effectuées en Silver.
+    sls_order_dt             VARCHAR(20),
+    sls_ship_dt              VARCHAR(20),
+    sls_due_dt               VARCHAR(20),
+
+    -- Mesures commerciales conservées dans leur format source
+    sls_sales                VARCHAR(50),
+    sls_quantity             VARCHAR(50),
+    sls_price                VARCHAR(50),
+
+    -- Métadonnées techniques
+    dwh_ingestion_timestamp  DATETIME2 NOT NULL
+        DEFAULT SYSDATETIME(),
+
+    dwh_source_system        VARCHAR(20) NOT NULL
+        DEFAULT 'CRM'
 );
 GO
 
 
 /* ============================================================
-   ERP - Customer Information
+   TABLE : bronze.erp_cust_az12
+   SOURCE : ERP
+   DESCRIPTION :
+   Stocke les informations complémentaires relatives aux clients
+   issues du système ERP.
    ============================================================ */
 
 DROP TABLE IF EXISTS bronze.erp_cust_az12;
@@ -95,18 +160,27 @@ GO
 
 CREATE TABLE bronze.erp_cust_az12
 (
-    cid                 VARCHAR(55),
-    bdate               VARCHAR(20),
-    gen                 VARCHAR(50),
+    -- Identifiant / clé client provenant de l'ERP
+    cid                      VARCHAR(55),
 
-    dwh_ingestion_timestamp DATETIME2 DEFAULT SYSDATETIME(),
-    dwh_source_system       VARCHAR(20) DEFAULT 'ERP'
+    -- Date de naissance conservée sous forme texte
+    bdate                    VARCHAR(20),
+
+    -- Genre provenant de l'ERP
+    gen                      VARCHAR(50),
+
+    -- Métadonnées techniques
+    dwh_ingestion_timestamp  DATETIME2 DEFAULT SYSDATETIME(),
+    dwh_source_system        VARCHAR(20) DEFAULT 'ERP'
 );
 GO
 
 
 /* ============================================================
-   ERP - Customer Location
+   TABLE : bronze.erp_loc_a101
+   SOURCE : ERP
+   DESCRIPTION :
+   Stocke les informations de localisation des clients.
    ============================================================ */
 
 DROP TABLE IF EXISTS bronze.erp_loc_a101;
@@ -114,17 +188,24 @@ GO
 
 CREATE TABLE bronze.erp_loc_a101
 (
-    cid                 VARCHAR(55),
-    cntry               VARCHAR(55),
+    -- Identifiant du client
+    cid                      VARCHAR(55),
 
-    dwh_ingestion_timestamp DATETIME2 DEFAULT SYSDATETIME(),
-    dwh_source_system       VARCHAR(20) DEFAULT 'ERP'
+    -- Pays / localisation du client
+    cntry                    VARCHAR(55),
+
+    -- Métadonnées techniques
+    dwh_ingestion_timestamp  DATETIME2 DEFAULT SYSDATETIME(),
+    dwh_source_system        VARCHAR(20) DEFAULT 'ERP'
 );
 GO
 
 
 /* ============================================================
-   ERP - Product Categories
+   TABLE : bronze.erp_px_cat_g1v2
+   SOURCE : ERP
+   DESCRIPTION :
+   Stocke la hiérarchie de catégories associée aux produits.
    ============================================================ */
 
 DROP TABLE IF EXISTS bronze.erp_px_cat_g1v2;
@@ -132,12 +213,22 @@ GO
 
 CREATE TABLE bronze.erp_px_cat_g1v2
 (
-    id                  VARCHAR(55),
-    cat                 VARCHAR(55),
-    subcat              VARCHAR(55),
-    maintenance         VARCHAR(55),
+    -- Identifiant métier permettant de relier la catégorie
+    -- aux informations produits
+    id                       VARCHAR(55),
 
-    dwh_ingestion_timestamp DATETIME2 DEFAULT SYSDATETIME(),
-    dwh_source_system       VARCHAR(20) DEFAULT 'ERP'
+    -- Catégorie principale
+    cat                      VARCHAR(55),
+
+    -- Sous-catégorie
+    subcat                   VARCHAR(55),
+
+    -- Information relative à la maintenance du produit
+    maintenance              VARCHAR(55),
+
+    -- Métadonnées techniques
+    dwh_ingestion_timestamp  DATETIME2 DEFAULT SYSDATETIME(),
+    dwh_source_system        VARCHAR(20) DEFAULT 'ERP'
 );
 GO
+
